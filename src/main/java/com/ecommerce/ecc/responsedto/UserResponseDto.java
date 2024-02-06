@@ -1,7 +1,5 @@
 package com.ecommerce.ecc.responsedto;
 
-import org.springframework.stereotype.Component;
-
 import com.ecommerce.ecc.enums.UserRole;
 
 import lombok.AllArgsConstructor;
@@ -10,7 +8,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Component
 @Getter
 @Setter
 @Builder
