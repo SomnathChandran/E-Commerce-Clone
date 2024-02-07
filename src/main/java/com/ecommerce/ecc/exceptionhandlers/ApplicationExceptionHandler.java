@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
+import com.ecommerce.ecc.exceptions.UsernameAlreadyExistException;
 
 @RestControllerAdvice
 public class ApplicationExceptionHandler {
@@ -23,5 +24,9 @@ public class ApplicationExceptionHandler {
 	@ExceptionHandler(InvalidUserRole.class)
 	public ResponseEntity<Object> invalidUserRole(InvalidUserRole ex) {
 		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "Should Have Only 'SELLER' & 'CUSTOMER' Role Only!! ");
+	}
+	@ExceptionHandler(UsernameAlreadyExistException.class)
+	public ResponseEntity<Object> usernameAlreadyExistException(UsernameAlreadyExistException ex) {
+		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The Given Email Should Be Unique To All User");
 	}
 }
