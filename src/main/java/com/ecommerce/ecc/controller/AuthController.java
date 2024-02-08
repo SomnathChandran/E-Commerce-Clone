@@ -20,7 +20,7 @@ public class AuthController {
 	
 	
 	private AuthService authService;
-
+	
 	@PostMapping("/users/register")
 	public ResponseEntity<ResponseStructure<UserResponseDto>> addUser(@RequestBody UserRequestDto requestDto){
 		return authService.addUser(requestDto);
