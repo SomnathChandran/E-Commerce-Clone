@@ -1,21 +1,21 @@
-package com.ecommerce.ecc.controller;
 
+package com.ecommerce.ecc.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ecommerce.ecc.requestdto.OtpModel;
 import com.ecommerce.ecc.requestdto.UserRequestDto;
 import com.ecommerce.ecc.responsedto.UserResponseDto;
 import com.ecommerce.ecc.service.AuthService;
 import com.ecommerce.ecc.utility.ResponseStructure;
 
 import lombok.AllArgsConstructor;
-
 @RestController
 @AllArgsConstructor
-@RequestMapping("/api/ecc/v1")
+@RequestMapping("/api/v1/ecommerce")
 public class AuthController {
 	
 	
@@ -24,5 +24,10 @@ public class AuthController {
 	@PostMapping("/users/register")
 	public ResponseEntity<ResponseStructure<UserResponseDto>> addUser(@RequestBody UserRequestDto requestDto){
 		return authService.addUser(requestDto);
+	}
+	
+	@PostMapping("/verify-otp")
+	public ResponseEntity<String> verifyOTP(@RequestBody OtpModel otpModel){
+		return authService.verifyOTP(otpModel);
 	}
 }
