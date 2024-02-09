@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -43,5 +44,9 @@ public class ApplicationExceptionHandler {
 	@ExceptionHandler(OtpExpiredException.class)
 	public ResponseEntity<Object> otpExpiredException(OtpExpiredException ex) {
 		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The Given OTP is Expired Because of taking long time Do it Fast");
+	}
+	@ExceptionHandler(UsernameNotFoundException.class)
+	public ResponseEntity<Object> usernameNotFoundException(UsernameNotFoundException ex) {
+		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The Username Or PassWord IS Incorrect please Check IT..");
 	}
 }
