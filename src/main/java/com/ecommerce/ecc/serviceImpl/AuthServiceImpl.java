@@ -1,65 +1,107 @@
 package com.ecommerce.ecc.serviceImpl;
+import java.time.LocalDateTime;
 import java.util.Date;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.ecommerce.ecc.cache.CacheStore;
+import com.ecommerce.ecc.entity.AccessToken;
 import com.ecommerce.ecc.entity.Customer;
+import com.ecommerce.ecc.entity.RefreshToken;
 import com.ecommerce.ecc.entity.Seller;
 import com.ecommerce.ecc.entity.User;
 import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
 import com.ecommerce.ecc.exceptions.SessionExpiredException;
+import com.ecommerce.ecc.exceptions.UsernameAlreadyExistException;
+import com.ecommerce.ecc.repository.AccessTokenRepo;
 import com.ecommerce.ecc.repository.CustomerRepository;
+import com.ecommerce.ecc.repository.RefreshTokenRepo;
 import com.ecommerce.ecc.repository.SellerRepository;
 import com.ecommerce.ecc.repository.UserRepository;
+import com.ecommerce.ecc.requestdto.AuthRequest;
 import com.ecommerce.ecc.requestdto.OtpModel;
 import com.ecommerce.ecc.requestdto.UserRequestDto;
+import com.ecommerce.ecc.responsedto.AuthResponse;
 import com.ecommerce.ecc.responsedto.UserResponseDto;
+import com.ecommerce.ecc.security.JwtService;
 import com.ecommerce.ecc.service.AuthService;
+import com.ecommerce.ecc.utility.CookieManager;
 import com.ecommerce.ecc.utility.MessageStructure;
 import com.ecommerce.ecc.utility.ResponseStructure;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import lombok.AllArgsConstructor;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@AllArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService{
 
 	private PasswordEncoder encoder;
-
 	private CustomerRepository customerRepo;
-
 	private SellerRepository sellerRepo;
-
 	private UserRepository userRepo;
-
 	private ResponseStructure<UserResponseDto> structure;
-
 	private CacheStore<String> otpCacheStore;
-
 	private CacheStore<User> userCacheStore;
-
 	private JavaMailSender javaMailSender;
+	private AuthenticationManager authenticationManager;
+	private CookieManager cookieManager;
+	private JwtService jwtService;
+	private AccessTokenRepo accessTokenRepo;
+	private RefreshTokenRepo refreshTokenRepo;
+	private ResponseStructure<AuthResponse> authResponse;
+
+	@Value("${myapp.access.expiry}")
+	private int accessExpirationInSeconds;
+
+	@Value("${myapp.refresh.expiry}")
+	private int refreshExpirationInSeconds;
 
 
+	public AuthServiceImpl(PasswordEncoder encoder, CustomerRepository customerRepo, SellerRepository sellerRepo,
+			UserRepository userRepo, ResponseStructure<UserResponseDto> structure, CacheStore<String> otpCacheStore,
+			CacheStore<User> userCacheStore, JavaMailSender javaMailSender, AuthenticationManager authenticationManager,
+			CookieManager cookieManager, JwtService jwtService,AccessTokenRepo accessTokenRepo,RefreshTokenRepo refreshTokenRepo
+			,ResponseStructure<AuthResponse> authResponse) {
+		super();
+		this.encoder = encoder;
+		this.customerRepo = customerRepo;
+		this.sellerRepo = sellerRepo;
+		this.userRepo = userRepo;
+		this.structure = structure;
+		this.otpCacheStore = otpCacheStore;
+		this.userCacheStore = userCacheStore;
+		this.javaMailSender = javaMailSender;
+		this.authenticationManager = authenticationManager;
+		this.cookieManager = cookieManager;
+		this.jwtService = jwtService;
+		this.accessTokenRepo = accessTokenRepo;
+		this.refreshTokenRepo = refreshTokenRepo;
+		this.authResponse = authResponse;
+		
+	}
 
 	@Override
 	public ResponseEntity<ResponseStructure<UserResponseDto>> addUser(UserRequestDto userRequestDto) {
 
 		if(userRepo.existsByEmail(userRequestDto.getEmail())) 
-			throw new IllegalArgumentException("The Email Already present with the gven Email");
+			throw new UsernameAlreadyExistException("The Email Already present with the given Email");
 		String OTP = otpGeneration();
 		User user = mapToUser(userRequestDto);
 		userCacheStore.add(userRequestDto.getEmail(), user);
@@ -96,6 +138,62 @@ public class AuthServiceImpl implements AuthService{
 		return new  ResponseEntity<String>("User Registration Successfully Completed!!", HttpStatus.CREATED);
 	}
 
+	@Override
+	public ResponseEntity<ResponseStructure<AuthResponse>> login(AuthRequest authRequest,HttpServletResponse response) {
+		String username = authRequest.getEmail().split("@")[0];
+		UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(username, authRequest.getPassword());
+		Authentication authenticate = authenticationManager.authenticate(token);
+		if(!authenticate.isAuthenticated()) throw new UsernameNotFoundException("Failed To Authenticate The User ");
+		else {
+			// generating The Cookies AuthResponse And Returning To The Client
+			return userRepo.findByUsername(username).map(user ->{
+				grantAccess(response, user);
+				return ResponseEntity.ok(authResponse.setStatus(HttpStatus.OK.value())
+						.setData(AuthResponse.builder()
+								.userId(user.getUserId())
+								.username(user.getUsername())
+								.role(user.getUserRole().name())
+								.isAuthenticated(true)
+								.accessExpiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
+								.refreshExpiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
+								.build())
+						.setMessage("Your Logged IN Successfully!!"));
+			}).get();
+		}
+
+
+
+	}
+	
+// --------------==================-------================-------------------=======================-------------=============-------------===
+
+	private void grantAccess(HttpServletResponse servletResponse,User user) {
+		// generate Access ANd Refresh Tokens
+		String accessToken = jwtService.generateAccessToken(user.getUsername());
+		String refreshToken = jwtService.generateRefreshToken(user.getUsername());
+		//adding the access and refresh tokens cookies to the Response
+		servletResponse.addCookie(cookieManager.configure(new Cookie("at",accessToken),accessExpirationInSeconds));
+		servletResponse.addCookie(cookieManager.configure(new Cookie("rt",refreshToken),refreshExpirationInSeconds));
+		
+		//saving the access and refresh tokens cookie in the Database
+		accessTokenRepo.save(AccessToken.builder()
+				.token(accessToken)
+				.isBloked(false)
+				.expiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
+				.build()
+				);
+		
+		refreshTokenRepo.save(RefreshToken.builder()
+				.token(refreshToken)
+				.expiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
+				.isBloked(false)
+				.build()
+				);
+		
+		
+	}
+
+
 	private void sendOtpToMail(User user ,String otp) throws MessagingException{
 
 
@@ -114,26 +212,26 @@ public class AuthServiceImpl implements AuthService{
 						+"<h1>E-Commerce Api<h1>"
 						).build());
 	}
-	
+
 	private void sendResponseToMail(User user) throws MessagingException {
-		
+
 		sendMail( MessageStructure.builder()
 				.to(user.getEmail())
 				.subject("Welcome to E-Commerce Api!")
 				.sentDate(new Date())
 				.text(
 						"Dear, "+"<h2>"+user.getUsername()+"<h2>"
-						+"<h3>Congratulations! 🎉..,Good To See You Intrested in Our E-Commerce Api,<h3>"
-						+"<h3>Sucessfully Completed Your Registration to E-Commerce Api<h3> <br>"
-						+"<h3>Your email has been successfully verified, and you're now officially registered with E-Commerce Api.<h3>"
-						+"<br>"
-						+"<h3>Let's get started on your e-commerce journey! 🚀<h3>"
-						+"<br>"
-						+"<h3>With Best Regards<h3><br>"
-						+"<h2>Mr.Somnath<h2>"
-						+"<h1>E-Commerce Api<h1>"
+								+"<h3>Congratulations! 🎉..,Good To See You Intrested in Our E-Commerce Api,<h3>"
+								+"<h3>Sucessfully Completed Your Registration to E-Commerce Api<h3> <br>"
+								+"<h3>Your email has been successfully verified, and you're now officially registered with E-Commerce Api.<h3>"
+								+"<br>"
+								+"<h3>Let's get started on your e-commerce journey! 🚀<h3>"
+								+"<br>"
+								+"<h3>With Best Regards<h3><br>"
+								+"<h2>Mr.Somnath<h2>"
+								+"<h1>E-Commerce Api<h1>"
 						).build());
-		
+
 	}
 
 	@Async
@@ -199,5 +297,8 @@ public class AuthServiceImpl implements AuthService{
 		return ""+(int) (100000 + Math.random() * 999999);
 		// Another Way => String.valueOf(new Random().nextInt(100000,999999)); 
 	}
+
+
+
 
 }

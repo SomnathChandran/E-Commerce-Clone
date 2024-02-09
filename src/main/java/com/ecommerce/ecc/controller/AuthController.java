@@ -6,12 +6,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ecommerce.ecc.requestdto.AuthRequest;
 import com.ecommerce.ecc.requestdto.OtpModel;
 import com.ecommerce.ecc.requestdto.UserRequestDto;
+import com.ecommerce.ecc.responsedto.AuthResponse;
 import com.ecommerce.ecc.responsedto.UserResponseDto;
 import com.ecommerce.ecc.service.AuthService;
 import com.ecommerce.ecc.utility.ResponseStructure;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
 @RestController
 @AllArgsConstructor
@@ -30,4 +33,10 @@ public class AuthController {
 	public ResponseEntity<String> verifyOTP(@RequestBody OtpModel otpModel){
 		return authService.verifyOTP(otpModel);
 	}
+	
+	@PostMapping("/login")
+	public ResponseEntity<ResponseStructure<AuthResponse>>login( @RequestBody AuthRequest authRequest , HttpServletResponse response){
+		return authService.login(authRequest,response);
+	}
+
 }
