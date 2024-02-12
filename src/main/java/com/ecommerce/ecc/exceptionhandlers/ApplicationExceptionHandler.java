@@ -12,6 +12,7 @@ import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
 import com.ecommerce.ecc.exceptions.SessionExpiredException;
+import com.ecommerce.ecc.exceptions.UserNotLoggedInException;
 import com.ecommerce.ecc.exceptions.UsernameAlreadyExistException;
 
 @RestControllerAdvice
@@ -48,5 +49,9 @@ public class ApplicationExceptionHandler {
 	@ExceptionHandler(UsernameNotFoundException.class)
 	public ResponseEntity<Object> usernameNotFoundException(UsernameNotFoundException ex) {
 		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The Username Or PassWord IS Incorrect please Check IT..");
+	}
+	@ExceptionHandler(UserNotLoggedInException.class)
+	public ResponseEntity<Object> userNotLoggedInException(UserNotLoggedInException ex) {
+		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The User Is Not Logged In,User Must Logged In Before Logout ");
 	}
 }

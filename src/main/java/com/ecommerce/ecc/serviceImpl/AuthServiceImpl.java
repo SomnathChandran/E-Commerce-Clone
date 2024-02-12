@@ -1,6 +1,7 @@
 package com.ecommerce.ecc.serviceImpl;
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
 import com.ecommerce.ecc.exceptions.SessionExpiredException;
+import com.ecommerce.ecc.exceptions.UserNotLoggedInException;
 import com.ecommerce.ecc.exceptions.UsernameAlreadyExistException;
 import com.ecommerce.ecc.repository.AccessTokenRepo;
 import com.ecommerce.ecc.repository.CustomerRepository;
@@ -45,6 +47,7 @@ import com.ecommerce.ecc.utility.ResponseStructure;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 
@@ -66,6 +69,7 @@ public class AuthServiceImpl implements AuthService{
 	private AccessTokenRepo accessTokenRepo;
 	private RefreshTokenRepo refreshTokenRepo;
 	private ResponseStructure<AuthResponse> authResponse;
+	private ResponseStructure<String> rs;
 
 	@Value("${myapp.access.expiry}")
 	private int accessExpirationInSeconds;
@@ -78,7 +82,7 @@ public class AuthServiceImpl implements AuthService{
 			UserRepository userRepo, ResponseStructure<UserResponseDto> structure, CacheStore<String> otpCacheStore,
 			CacheStore<User> userCacheStore, JavaMailSender javaMailSender, AuthenticationManager authenticationManager,
 			CookieManager cookieManager, JwtService jwtService,AccessTokenRepo accessTokenRepo,RefreshTokenRepo refreshTokenRepo
-			,ResponseStructure<AuthResponse> authResponse) {
+			,ResponseStructure<AuthResponse> authResponse, ResponseStructure<String> rs) {
 		super();
 		this.encoder = encoder;
 		this.customerRepo = customerRepo;
@@ -94,7 +98,8 @@ public class AuthServiceImpl implements AuthService{
 		this.accessTokenRepo = accessTokenRepo;
 		this.refreshTokenRepo = refreshTokenRepo;
 		this.authResponse = authResponse;
-		
+		this.rs = rs;
+
 	}
 
 	@Override
@@ -148,7 +153,8 @@ public class AuthServiceImpl implements AuthService{
 			// generating The Cookies AuthResponse And Returning To The Client
 			return userRepo.findByUsername(username).map(user ->{
 				grantAccess(response, user);
-				return ResponseEntity.ok(authResponse.setStatus(HttpStatus.OK.value())
+				return ResponseEntity.ok(
+						authResponse.setStatus(HttpStatus.OK.value())
 						.setData(AuthResponse.builder()
 								.userId(user.getUserId())
 								.username(user.getUsername())
@@ -164,8 +170,32 @@ public class AuthServiceImpl implements AuthService{
 
 
 	}
-	
-// --------------==================-------================-------------------=======================-------------=============-------------===
+
+	@Override
+	public ResponseEntity<ResponseStructure<String>> logout(String rt,String at, HttpServletResponse response) {
+		
+		if(rt==null && at==null) {throw new UserNotLoggedInException("The User Must And Should Login Before Logout!!");}
+		
+		accessTokenRepo.findByToken(at).ifPresent(accessToken ->{
+			accessToken.setBloked(true);
+			accessTokenRepo.save(accessToken);
+		});
+		refreshTokenRepo.findByToken(rt).ifPresent(refreshToken ->{
+			refreshToken.setBloked(true);
+			refreshTokenRepo.save(refreshToken);
+		});
+		
+		response.addCookie(cookieManager.invalidate(new Cookie("at","")));
+		response.addCookie(cookieManager.invalidate(new Cookie("rt", "")));
+		
+		rs.setStatus(HttpStatus.OK.value());
+		rs.setMessage("SuccessFully Logged Out!!");
+		rs.setData("Login Back For Access!!");
+		
+			return new ResponseEntity<ResponseStructure<String>>(rs,HttpStatus.OK);
+	}
+
+	// --------------==================-------================-------------------=======================-------------=============-------------===
 
 	private void grantAccess(HttpServletResponse servletResponse,User user) {
 		// generate Access ANd Refresh Tokens
@@ -174,7 +204,7 @@ public class AuthServiceImpl implements AuthService{
 		//adding the access and refresh tokens cookies to the Response
 		servletResponse.addCookie(cookieManager.configure(new Cookie("at",accessToken),accessExpirationInSeconds));
 		servletResponse.addCookie(cookieManager.configure(new Cookie("rt",refreshToken),refreshExpirationInSeconds));
-		
+
 		//saving the access and refresh tokens cookie in the Database
 		accessTokenRepo.save(AccessToken.builder()
 				.token(accessToken)
@@ -182,15 +212,15 @@ public class AuthServiceImpl implements AuthService{
 				.expiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
 				.build()
 				);
-		
+
 		refreshTokenRepo.save(RefreshToken.builder()
 				.token(refreshToken)
 				.expiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
 				.isBloked(false)
 				.build()
 				);
-		
-		
+
+
 	}
 
 
@@ -297,6 +327,8 @@ public class AuthServiceImpl implements AuthService{
 		return ""+(int) (100000 + Math.random() * 999999);
 		// Another Way => String.valueOf(new Random().nextInt(100000,999999)); 
 	}
+
+
 
 
 
