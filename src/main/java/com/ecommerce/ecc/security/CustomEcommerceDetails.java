@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import com.ecommerce.ecc.entity.User;
 
+@SuppressWarnings("serial")
 public class CustomEcommerceDetails implements UserDetails {
 	
 	private User user;

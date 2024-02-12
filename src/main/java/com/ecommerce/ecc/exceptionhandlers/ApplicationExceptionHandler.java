@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.ecommerce.ecc.exceptions.AuthFailedException;
 import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
@@ -53,5 +54,9 @@ public class ApplicationExceptionHandler {
 	@ExceptionHandler(UserNotLoggedInException.class)
 	public ResponseEntity<Object> userNotLoggedInException(UserNotLoggedInException ex) {
 		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The User Is Not Logged In,User Must Logged In Before Logout ");
+	}
+	@ExceptionHandler(AuthFailedException.class)
+	public ResponseEntity<Object> authFailedException(AuthFailedException ex) {
+		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The User Authentication Is Failed ");
 	}
 }

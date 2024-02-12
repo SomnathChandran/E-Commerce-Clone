@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import com.ecommerce.ecc.entity.Customer;
 import com.ecommerce.ecc.entity.RefreshToken;
 import com.ecommerce.ecc.entity.Seller;
 import com.ecommerce.ecc.entity.User;
+import com.ecommerce.ecc.exceptions.AuthFailedException;
 import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
@@ -37,6 +39,7 @@ import com.ecommerce.ecc.requestdto.AuthRequest;
 import com.ecommerce.ecc.requestdto.OtpModel;
 import com.ecommerce.ecc.requestdto.UserRequestDto;
 import com.ecommerce.ecc.responsedto.AuthResponse;
+import com.ecommerce.ecc.responsedto.SimpleResponseStructure;
 import com.ecommerce.ecc.responsedto.UserResponseDto;
 import com.ecommerce.ecc.security.JwtService;
 import com.ecommerce.ecc.service.AuthService;
@@ -47,7 +50,6 @@ import com.ecommerce.ecc.utility.ResponseStructure;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 
@@ -69,7 +71,7 @@ public class AuthServiceImpl implements AuthService{
 	private AccessTokenRepo accessTokenRepo;
 	private RefreshTokenRepo refreshTokenRepo;
 	private ResponseStructure<AuthResponse> authResponse;
-	private ResponseStructure<String> rs;
+	private ResponseStructure<SimpleResponseStructure> simpleStructure;
 
 	@Value("${myapp.access.expiry}")
 	private int accessExpirationInSeconds;
@@ -82,7 +84,7 @@ public class AuthServiceImpl implements AuthService{
 			UserRepository userRepo, ResponseStructure<UserResponseDto> structure, CacheStore<String> otpCacheStore,
 			CacheStore<User> userCacheStore, JavaMailSender javaMailSender, AuthenticationManager authenticationManager,
 			CookieManager cookieManager, JwtService jwtService,AccessTokenRepo accessTokenRepo,RefreshTokenRepo refreshTokenRepo
-			,ResponseStructure<AuthResponse> authResponse, ResponseStructure<String> rs) {
+			,ResponseStructure<AuthResponse> authResponse, ResponseStructure<String> rs, ResponseStructure<SimpleResponseStructure> simpleStructure) {
 		super();
 		this.encoder = encoder;
 		this.customerRepo = customerRepo;
@@ -98,7 +100,7 @@ public class AuthServiceImpl implements AuthService{
 		this.accessTokenRepo = accessTokenRepo;
 		this.refreshTokenRepo = refreshTokenRepo;
 		this.authResponse = authResponse;
-		this.rs = rs;
+		this.simpleStructure = simpleStructure;
 
 	}
 
@@ -172,31 +174,90 @@ public class AuthServiceImpl implements AuthService{
 	}
 
 	@Override
-	public ResponseEntity<ResponseStructure<String>> logout(String rt,String at, HttpServletResponse response) {
+	public ResponseEntity<ResponseStructure<SimpleResponseStructure>> logout(String rt,String at, HttpServletResponse response) {
 		
 		if(rt==null && at==null) {throw new UserNotLoggedInException("The User Must And Should Login Before Logout!!");}
 		
 		accessTokenRepo.findByToken(at).ifPresent(accessToken ->{
-			accessToken.setBloked(true);
+			accessToken.setBlocked(true);
 			accessTokenRepo.save(accessToken);
 		});
 		refreshTokenRepo.findByToken(rt).ifPresent(refreshToken ->{
-			refreshToken.setBloked(true);
+			refreshToken.setBlocked(true);
 			refreshTokenRepo.save(refreshToken);
 		});
 		
 		response.addCookie(cookieManager.invalidate(new Cookie("at","")));
 		response.addCookie(cookieManager.invalidate(new Cookie("rt", "")));
 		
-		rs.setStatus(HttpStatus.OK.value());
-		rs.setMessage("SuccessFully Logged Out!!");
-		rs.setData("Login Back For Access!!");
+		simpleStructure.setStatus(HttpStatus.OK.value());
+		simpleStructure.setMessage("SuccessFully Logged Out!!");
+//		simpleStructure.setData(response);
 		
-			return new ResponseEntity<ResponseStructure<String>>(rs,HttpStatus.OK);
+			return new ResponseEntity<ResponseStructure<SimpleResponseStructure>>(simpleStructure,HttpStatus.OK);
 	}
+	
+	@Override
+	public ResponseEntity<SimpleResponseStructure> revokeOther(String accessToken,String refreshToken ,HttpServletResponse httpServletResponse)
+		{
+		String userName = SecurityContextHolder.getContext().getAuthentication().getName();
 
+		if(userName!=null)
+		{
+			userRepo.findByUsername(userName).ifPresent(user->{
+				blockAccessTokens(accessTokenRepo.findAllByUserAndIsBlockedAndTokenNot(user,false,accessToken));
+				blockRefreshTokens(refreshTokenRepo.findAllByUserAndIsBlockedAndTokenNot(user,false,refreshToken));
+			});
+
+			SimpleResponseStructure structure=new SimpleResponseStructure();
+			structure.setStatus(HttpStatus.OK.value());
+			structure.setMessage("Logged out from all other Devices..!!!");
+
+			return new ResponseEntity<SimpleResponseStructure>(structure,HttpStatus.OK);
+		}
+		throw new AuthFailedException("User Not Authenticated And User Not Present");
+			
+	}
+	
+	
+	@Override
+	public ResponseEntity<SimpleResponseStructure> revokeAll(String accessToken, String refreshToken,HttpServletResponse httpServletResponse) {
+		String userName = SecurityContextHolder.getContext().getAuthentication().getName();
+
+		if(userName!=null)
+		{
+			userRepo.findByUsername(userName).ifPresent(user->{
+				blockAccessTokens(accessTokenRepo.findByTokenAndIsBlocked(user,false));
+				blockRefreshTokens(refreshTokenRepo.findByTokenAndIsBlocked(user,false));
+			});
+
+			SimpleResponseStructure structure=new SimpleResponseStructure();
+			structure.setStatus(HttpStatus.OK.value());
+			structure.setMessage("Logged out from all  Devices..!!!");
+
+			return new ResponseEntity<SimpleResponseStructure>(structure,HttpStatus.OK);
+		}
+		throw new AuthFailedException("User Not Authenticated & User Not Present");
+	}
+		
+	
+	
 	// --------------==================-------================-------------------=======================-------------=============-------------===
 
+	private void blockAccessTokens(List<AccessToken>accessToken) {
+		accessToken.forEach(at ->{
+			at.setBlocked(true);
+			accessTokenRepo.save(at);
+		});
+	}
+	private void blockRefreshTokens(List<RefreshToken>refreshToken) {
+		refreshToken.forEach(rt ->{
+			rt.setBlocked(true);
+			refreshTokenRepo.save(rt);
+		});
+	}
+	
+	
 	private void grantAccess(HttpServletResponse servletResponse,User user) {
 		// generate Access ANd Refresh Tokens
 		String accessToken = jwtService.generateAccessToken(user.getUsername());
@@ -209,7 +270,7 @@ public class AuthServiceImpl implements AuthService{
 		accessTokenRepo.save(AccessToken.builder()
 				.token(accessToken)
 				.user(user)
-				.isBloked(false)
+				.isBlocked(false)
 				.expiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
 				.build()
 				);
@@ -218,7 +279,7 @@ public class AuthServiceImpl implements AuthService{
 				.token(refreshToken)
 				.user(user)
 				.expiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
-				.isBloked(false)
+				.isBlocked(false)
 				.build()
 				);
 
@@ -329,6 +390,9 @@ public class AuthServiceImpl implements AuthService{
 		return ""+(int) (100000 + Math.random() * 999999);
 		// Another Way => String.valueOf(new Random().nextInt(100000,999999)); 
 	}
+
+	
+
 
 
 
