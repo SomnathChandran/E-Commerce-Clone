@@ -208,6 +208,7 @@ public class AuthServiceImpl implements AuthService{
 		//saving the access and refresh tokens cookie in the Database
 		accessTokenRepo.save(AccessToken.builder()
 				.token(accessToken)
+				.user(user)
 				.isBloked(false)
 				.expiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
 				.build()
@@ -215,6 +216,7 @@ public class AuthServiceImpl implements AuthService{
 
 		refreshTokenRepo.save(RefreshToken.builder()
 				.token(refreshToken)
+				.user(user)
 				.expiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
 				.isBloked(false)
 				.build()
