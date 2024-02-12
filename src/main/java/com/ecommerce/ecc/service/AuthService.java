@@ -6,6 +6,7 @@ import com.ecommerce.ecc.requestdto.AuthRequest;
 import com.ecommerce.ecc.requestdto.OtpModel;
 import com.ecommerce.ecc.requestdto.UserRequestDto;
 import com.ecommerce.ecc.responsedto.AuthResponse;
+import com.ecommerce.ecc.responsedto.SimpleResponseStructure;
 import com.ecommerce.ecc.responsedto.UserResponseDto;
 import com.ecommerce.ecc.utility.ResponseStructure;
 
@@ -20,6 +21,11 @@ public interface AuthService {
 
 	ResponseEntity<ResponseStructure<AuthResponse>> login(AuthRequest authRequest,HttpServletResponse response);
 
-	ResponseEntity<ResponseStructure<String>> logout(String refreshToken,String accessToken, HttpServletResponse response);
+	ResponseEntity<ResponseStructure<SimpleResponseStructure>> logout(String refreshToken,String accessToken, HttpServletResponse response);
+
+	ResponseEntity<SimpleResponseStructure> revokeOther(String accessToken, String refreshToken, HttpServletResponse response);
+
+	ResponseEntity<SimpleResponseStructure> revokeAll(String accessToken, String refreshToken,
+			HttpServletResponse httpServletResponse);
 
 }
