@@ -13,6 +13,7 @@ import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
 import com.ecommerce.ecc.exceptions.SessionExpiredException;
+import com.ecommerce.ecc.exceptions.UserAlreadyLoggedINException;
 import com.ecommerce.ecc.exceptions.UserNotLoggedInException;
 import com.ecommerce.ecc.exceptions.UsernameAlreadyExistException;
 
@@ -58,5 +59,9 @@ public class ApplicationExceptionHandler {
 	@ExceptionHandler(AuthFailedException.class)
 	public ResponseEntity<Object> authFailedException(AuthFailedException ex) {
 		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The User Authentication Is Failed ");
+	}
+	@ExceptionHandler(UserAlreadyLoggedINException.class)
+	public ResponseEntity<Object> serAlreadyLoggedINException(UserAlreadyLoggedINException ex) {
+		return structre(HttpStatus.BAD_REQUEST, ex.getMessage(), "The User Authentication Is Failed,Because User Already Logged IN..!! ");
 	}
 }

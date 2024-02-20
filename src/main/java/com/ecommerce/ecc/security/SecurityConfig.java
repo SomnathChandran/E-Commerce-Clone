@@ -1,5 +1,6 @@
 package com.ecommerce.ecc.security;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,11 +21,11 @@ import lombok.AllArgsConstructor;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@AllArgsConstructor
+//@AllArgsConstructor
 public class SecurityConfig {
-	
+	@Autowired
 	private JwtFilter jwtFilter;
-
+	@Autowired
 	private CustomEcommerceDetailsService ecommerceDetailsService;
 	
 	@Bean
