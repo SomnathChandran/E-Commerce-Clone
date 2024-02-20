@@ -35,5 +35,7 @@ public class User{
 	private UserRole userRole;
 	private boolean isEmailVerified;
 	private int isDeleted;
+	
+	
 
 }
