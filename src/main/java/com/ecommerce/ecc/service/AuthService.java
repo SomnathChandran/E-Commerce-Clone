@@ -15,17 +15,18 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public interface AuthService {
 
-	ResponseEntity<ResponseStructure<UserResponseDto>> addUser(UserRequestDto requestDto);
+	ResponseEntity<ResponseStructure<UserResponseDto>> registerUser(UserRequestDto requestDto);
 
 	ResponseEntity<String> verifyOTP(OtpModel otpModel);
 
-	ResponseEntity<ResponseStructure<AuthResponse>> login(AuthRequest authRequest,HttpServletResponse response);
+	ResponseEntity<ResponseStructure<AuthResponse>> login(String rt, String at,AuthRequest authRequest,HttpServletResponse response);
 
-	ResponseEntity<ResponseStructure<SimpleResponseStructure>> logout(String refreshToken,String accessToken, HttpServletResponse response);
+	ResponseEntity<SimpleResponseStructure> logout(String refreshToken,String accessToken, HttpServletResponse response);
 
-	ResponseEntity<SimpleResponseStructure> revokeOther(String accessToken, String refreshToken, HttpServletResponse response);
+	ResponseEntity<SimpleResponseStructure> revokeOther(String accessToken, String refreshToken);
 
-	ResponseEntity<SimpleResponseStructure> revokeAll(String accessToken, String refreshToken,
-			HttpServletResponse httpServletResponse);
+	ResponseEntity<SimpleResponseStructure> revokeAll(String accessToken, String refreshToken);
+
+	ResponseEntity<ResponseStructure<AuthResponse>> refreshLoginAndToken(String accessToken,String refreshToken, HttpServletResponse response);
 
 }

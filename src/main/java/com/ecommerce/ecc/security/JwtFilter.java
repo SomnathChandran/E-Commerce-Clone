@@ -46,22 +46,18 @@ public class JwtFilter extends OncePerRequestFilter {
 			}
 			String username = null;
 			System.out.println("1");
-			 if(at!=null && rt !=null) {
-					System.out.println("2");
-			 }
-			 else{
-				 throw new UserNotLoggedInException("User Not Looged IN!!");
-			 }
+			 if( rt !=null) { 
+			 
 			 Optional<AccessToken> accessToken = accessRepo.findByTokenAndIsBlocked(at,false);
 				System.out.println("3");
 
-			 if(accessToken == null)  throw new AuthFailedException("The Token Is NOt Present!!");
+			 if(accessToken == null)  throw new AuthFailedException("The Token Is Blocked NOt Present and Session Expired!!");
 //				System.out.println("4");
-
+			 }
 			 
 			 else{
 				 log.info("Authenticating The Token!! ");
-				 username =jwtService.extractUsername(at);
+				 username =jwtService.extractUsername(rt);
 				if(username == null)        throw new RuntimeException();
 				UserDetails userDetails = detailsService.loadUserByUsername(username);
 				UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(username, null, userDetails.getAuthorities());

@@ -24,12 +24,12 @@ public class ScheduleJobs {
 	
 	private RefreshTokenRepo refreshTokenRepo;
 	
-	@Scheduled(fixedDelay = 1000l*120)
+//	@Scheduled(fixedDelay = 1000l*120)
 	public void cleanNonVerifiedUsers() {
 		 List<User> dlist = userRepo.findByIsEmailVerified(false);
 		 userRepo.deleteAll(dlist);
    }
-	@Scheduled(fixedDelay = 1000l*60*60)
+//	@Scheduled(fixedDelay = 1000l*60*60)
 	public void clearExpiredTokens() {
 		accessTokenRepo.deleteAll(accessTokenRepo.findByExpirationBefore(LocalDateTime.now()));
 		refreshTokenRepo.deleteAll(refreshTokenRepo.findByExpirationBefore(LocalDateTime.now()));

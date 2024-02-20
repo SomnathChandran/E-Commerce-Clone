@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -28,6 +29,7 @@ import com.ecommerce.ecc.exceptions.InvalidOtpException;
 import com.ecommerce.ecc.exceptions.InvalidUserRole;
 import com.ecommerce.ecc.exceptions.OtpExpiredException;
 import com.ecommerce.ecc.exceptions.SessionExpiredException;
+import com.ecommerce.ecc.exceptions.UserAlreadyLoggedINException;
 import com.ecommerce.ecc.exceptions.UserNotLoggedInException;
 import com.ecommerce.ecc.exceptions.UsernameAlreadyExistException;
 import com.ecommerce.ecc.repository.AccessTokenRepo;
@@ -71,7 +73,7 @@ public class AuthServiceImpl implements AuthService{
 	private AccessTokenRepo accessTokenRepo;
 	private RefreshTokenRepo refreshTokenRepo;
 	private ResponseStructure<AuthResponse> authResponse;
-	private ResponseStructure<SimpleResponseStructure> simpleStructure;
+	private SimpleResponseStructure simpleStructure;
 
 	@Value("${myapp.access.expiry}")
 	private int accessExpirationInSeconds;
@@ -83,8 +85,9 @@ public class AuthServiceImpl implements AuthService{
 	public AuthServiceImpl(PasswordEncoder encoder, CustomerRepository customerRepo, SellerRepository sellerRepo,
 			UserRepository userRepo, ResponseStructure<UserResponseDto> structure, CacheStore<String> otpCacheStore,
 			CacheStore<User> userCacheStore, JavaMailSender javaMailSender, AuthenticationManager authenticationManager,
-			CookieManager cookieManager, JwtService jwtService,AccessTokenRepo accessTokenRepo,RefreshTokenRepo refreshTokenRepo
-			,ResponseStructure<AuthResponse> authResponse, ResponseStructure<String> rs, ResponseStructure<SimpleResponseStructure> simpleStructure) {
+			CookieManager cookieManager, JwtService jwtService,AccessTokenRepo accessTokenRepo,RefreshTokenRepo refreshTokenRepo,
+			ResponseStructure<AuthResponse> authResponse, ResponseStructure<String> rs,  ResponseStructure<AuthResponse> authStructure,
+			SimpleResponseStructure simpleStructure) {
 		super();
 		this.encoder = encoder;
 		this.customerRepo = customerRepo;
@@ -101,11 +104,12 @@ public class AuthServiceImpl implements AuthService{
 		this.refreshTokenRepo = refreshTokenRepo;
 		this.authResponse = authResponse;
 		this.simpleStructure = simpleStructure;
+		
 
 	}
 
 	@Override
-	public ResponseEntity<ResponseStructure<UserResponseDto>> addUser(UserRequestDto userRequestDto) {
+	public ResponseEntity<ResponseStructure<UserResponseDto>> registerUser(UserRequestDto userRequestDto) {
 
 		if(userRepo.existsByEmail(userRequestDto.getEmail())) 
 			throw new UsernameAlreadyExistException("The Email Already present with the given Email");
@@ -130,9 +134,18 @@ public class AuthServiceImpl implements AuthService{
 		User user = userCacheStore.get(otpModel.getEmail());
 		String otp = otpCacheStore.get(otpModel.getEmail());
 
-		if(otp == null) throw new OtpExpiredException("The OTP is Expired Try Once Again");
-		if(user == null) throw new SessionExpiredException("The Registration Session is Expired");
-		if(!otp.equals(otpModel.getOtp()))throw new InvalidOtpException("The Given OTP is Invalid");
+		if(otp == null)
+			{
+			throw new OtpExpiredException("The OTP is Expired Try Once Again");
+			}
+		if(user == null) 
+			{
+			throw new SessionExpiredException("The Registration Session is Expired");
+			}
+		if(!otp.equals(otpModel.getOtp()))
+			{
+			throw new InvalidOtpException("The Given OTP is Invalid");
+			}
 
 		user.setEmailVerified(true);
 		userRepo.save(user);
@@ -146,15 +159,29 @@ public class AuthServiceImpl implements AuthService{
 	}
 
 	@Override
-	public ResponseEntity<ResponseStructure<AuthResponse>> login(AuthRequest authRequest,HttpServletResponse response) {
+	public ResponseEntity<ResponseStructure<AuthResponse>> login(String rt, String at,AuthRequest authRequest,HttpServletResponse response) {
+		System.out.println("Inside Login");
+		if(at != null && rt != null)
+			{
+			throw new UserAlreadyLoggedINException("The User Is Already Logged IN!!");
+			}
+		System.out.println("Inside Login2");
+
 		String username = authRequest.getEmail().split("@")[0];
 		UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(username, authRequest.getPassword());
 		Authentication authenticate = authenticationManager.authenticate(token);
-		if(!authenticate.isAuthenticated()) throw new UsernameNotFoundException("Failed To Authenticate The User ");
+		if(!authenticate.isAuthenticated())
+			{
+			System.out.println("Inside Login3");
+
+			throw new UsernameNotFoundException("Failed To Authenticate The User ");
+			}
 		else {
 			// generating The Cookies AuthResponse And Returning To The Client
 			return userRepo.findByUsername(username).map(user ->{
 				grantAccess(response, user);
+				System.out.println("Inside Login4");
+
 				return ResponseEntity.ok(
 						authResponse.setStatus(HttpStatus.OK.value())
 						.setData(AuthResponse.builder()
@@ -168,13 +195,10 @@ public class AuthServiceImpl implements AuthService{
 						.setMessage("Your Logged IN Successfully!!"));
 			}).get();
 		}
-
-
-
 	}
 
 	@Override
-	public ResponseEntity<ResponseStructure<SimpleResponseStructure>> logout(String rt,String at, HttpServletResponse response) {
+	public ResponseEntity<SimpleResponseStructure> logout(String rt,String at, HttpServletResponse response) {
 		
 		if(rt==null && at==null) {throw new UserNotLoggedInException("The User Must And Should Login Before Logout!!");}
 		
@@ -192,13 +216,13 @@ public class AuthServiceImpl implements AuthService{
 		
 		simpleStructure.setStatus(HttpStatus.OK.value());
 		simpleStructure.setMessage("SuccessFully Logged Out!!");
-//		simpleStructure.setData(response);
+//		simpleStructure.setData();
 		
-			return new ResponseEntity<ResponseStructure<SimpleResponseStructure>>(simpleStructure,HttpStatus.OK);
+			return new ResponseEntity<SimpleResponseStructure>(simpleStructure,HttpStatus.OK);
 	}
 	
 	@Override
-	public ResponseEntity<SimpleResponseStructure> revokeOther(String accessToken,String refreshToken ,HttpServletResponse httpServletResponse)
+	public ResponseEntity<SimpleResponseStructure> revokeOther(String accessToken,String refreshToken )
 		{
 		String userName = SecurityContextHolder.getContext().getAuthentication().getName();
 
@@ -221,7 +245,7 @@ public class AuthServiceImpl implements AuthService{
 	
 	
 	@Override
-	public ResponseEntity<SimpleResponseStructure> revokeAll(String accessToken, String refreshToken,HttpServletResponse httpServletResponse) {
+	public ResponseEntity<SimpleResponseStructure> revokeAll(String accessToken, String refreshToken) {
 		String userName = SecurityContextHolder.getContext().getAuthentication().getName();
 
 		if(userName!=null)
@@ -239,9 +263,46 @@ public class AuthServiceImpl implements AuthService{
 		}
 		throw new AuthFailedException("User Not Authenticated & User Not Present");
 	}
+	
+	@Override
+	public ResponseEntity<ResponseStructure<AuthResponse>> refreshLoginAndToken(String accessToken,String refreshToken,HttpServletResponse response) {
+		if(refreshToken == null ) throw new UserNotLoggedInException("The User Need To LogIn!!");
+		String username = jwtService.extractUsername(refreshToken);
+		if(accessToken != null ) {
+			 accessTokenRepo.findByToken(accessToken).ifPresent(token->{
+				 token.setBlocked(true);
+				 accessTokenRepo.save(token);
+			 });
+		}
+		User user = userRepo.findByUsername(username).orElseThrow(()-> new UserNotLoggedInException("User Should Logged IN Before This Task"));
+		if(refreshToken == null) throw new UserNotLoggedInException("The User Must And Should Logged In for Refresh Login And Refresh Token");
+		boolean notBlockedToken = refreshTokenRepo.existsByTokenAndIsBlockedAndExpirationAfter(refreshToken,false,LocalDateTime.now());
+		
+		if(notBlockedToken) 
+			grantAccess(response, user);
+			 return refreshTokenRepo.findByToken(refreshToken).map(token ->{
+				  token.setBlocked(true);
+				  refreshTokenRepo.save(token);				  
+
+					return ResponseEntity.ok(
+							authResponse.setStatus(HttpStatus.OK.value())
+							.setData(AuthResponse.builder()
+									.userId(token.getUser().getUserId())
+									.username(token.getUser().getUsername())
+									.role(token.getUser().getUserRole().name())
+									.isAuthenticated(true)
+									.accessExpiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
+									.refreshExpiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
+									.build())
+							.setMessage("Your Logged IN Successfully!!"));
+				}).get();
+		
+			
+		
+	}
 		
 	
-	
+    //---------------==============---------------==============================--------------------===================------------------==========
 	// --------------==================-------================-------------------=======================-------------=============-------------===
 
 	private void blockAccessTokens(List<AccessToken>accessToken) {
@@ -260,6 +321,7 @@ public class AuthServiceImpl implements AuthService{
 	
 	private void grantAccess(HttpServletResponse servletResponse,User user) {
 		// generate Access ANd Refresh Tokens
+//		System.out.println(user.getUsername());
 		String accessToken = jwtService.generateAccessToken(user.getUsername());
 		String refreshToken = jwtService.generateRefreshToken(user.getUsername());
 		//adding the access and refresh tokens cookies to the Response
@@ -384,12 +446,25 @@ public class AuthServiceImpl implements AuthService{
 				.userRole(user.getUserRole())
 				.build();
 	}
+	
+//	private AuthResponse mapToAuthResponseDto(AuthResponse user) {
+//		return AuthResponse.builder()
+//				.userId(user.getUserId())
+//				.username(user.getUsername())
+//				.isAuthenticated(true)
+//				.accessExpiration(LocalDateTime.now().plusSeconds(accessExpirationInSeconds))
+//				.refreshExpiration(LocalDateTime.now().plusSeconds(refreshExpirationInSeconds))
+//				.role(user.getRole())
+//				.build();
+//	}
 
 	private String otpGeneration() {
 
 		return ""+(int) (100000 + Math.random() * 999999);
 		// Another Way => String.valueOf(new Random().nextInt(100000,999999)); 
 	}
+
+	
 
 	
 
